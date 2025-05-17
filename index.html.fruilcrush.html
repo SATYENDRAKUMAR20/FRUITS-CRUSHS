@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>फ्रूट क्रश</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        body {
+            background: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .lobby {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100%;
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)),
+                        url(https://ik.imagekit.io/8a5q1d0zah/ChatGPT%20Image%20May%2014,%202025,%2008_23_29%20PM.png?updatedAt=1747408748641) center/cover;
+        }
+
+        .game-title {
+            font-size: 2.5rem;
+            text-shadow: 0 0 20px #ff6b6b;
+            margin-bottom: 1.5em;
+            animation: glow 2s infinite;
+            text-align: center;
+            padding: 0 10px;
+        }
+
+        .btn {
+            padding: 1.2rem 2.5rem;
+            font-size: 1.5rem;
+            background: #ff4757;
+            border: none;
+            border-radius: 35px;
+            color: white;
+            cursor: pointer;
+            margin: 15px;
+            transition: transform 0.2s;
+            width: 80%;
+            max-width: 300px;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            background: #ff6b81;
+        }
+
+        .level-container {
+            display: none;
+            padding: 15px;
+            width: 100%;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 12px;
+            padding: 10px;
+        }
+
+        .level-card {
+            background: #57606f;
+            padding: 1.2rem;
+            border-radius: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            font-size: 1.4rem;
+        }
+
+        .level-card.locked {
+            background: #2f3542;
+            cursor: not-allowed;
+        }
+
+        .game-container {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            padding: 10px;
+            position: relative;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+            background: #333;
+            padding: 5px;
+            border-radius: 10px;
+            width: 95vw;
+            height: 95vw;
+            max-width: 500px;
+            max-height: 500px;
+            margin: 10px auto;
+        }
+
+        .candy {
+            aspect-ratio: 1;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            transition: all 0.2s ease;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .selected {
+            background: #ffcccc !important;
+            transform: scale(1.1);
+        }
+
+        #score {
+            font-size: 1.5rem;
+            margin: 15px 0;
+            text-align: center;
+            padding: 0 10px;
+        }
+
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 20px #ff6b6b; }
+            50% { text-shadow: 0 0 40px #ff6b6b; }
+        }
+    </style>
+</head>
+<body>
+    <div class="lobby" id="lobby">
+        <h1 class="game-title"></h1>
+        <button class="btn" onclick="startGame()">Play</button>
+        <button class="btn" onclick="showLevels()">Level</button>
+    </div>
+
+    <div class="level-container" id="levelContainer">
+        <button class="btn" onclick="showLobby()">Back</button>
+        <h2 style="text-align:center; margin:15px 0;">Level</h2>
+        <div class="level-grid" id="levelGrid"></div>
+    </div>
+
+    <div class="game-container" id="gameContainer">
+        <button class="btn" onclick="endGame()">Back</button>
+        <div id="score">Score: 0 (Target: 1000)</div>
+        <div id="board"></div>
+    </div>
+
+    <script>
+        const CANDIES = ['🍎', '🍊', '🍇', '🍉', '🍌', '🍍'];
+        let selectedCandy = null;
+        let score = 0;
+        let currentLevel = 1;
+        const TOTAL_LEVELS = 100;
+        let targetScore = 1000;
+
+        // Touch handling variables
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const SWIPE_THRESHOLD = 15;
+
+        function generateLevelGrid() {
+            const grid = document.getElementById('levelGrid');
+            grid.innerHTML = '';
+            
+            for(let i=1; i<=TOTAL_LEVELS; i++) {
+                const card = document.createElement('div');
+                card.className = `level-card ${i > currentLevel ? 'locked' : ''}`;
+                card.innerHTML = `
+                    <div style="font-size:1.5em">${i}</div>
+                    ${i > currentLevel ? '<div>🔒</div>' : ''}
+                `;
+                
+                if(i <= currentLevel) {
+                    card.addEventListener('click', () => startLevel(i));
+                }
+                grid.appendChild(card);
+            }
+        }
+
+        function showLobby() {
+            document.getElementById('lobby').style.display = 'flex';
+            document.getElementById('levelContainer').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'none';
+        }
+
+        function startGame() {
+            currentLevel = 1;
+            targetScore = 1000;
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            initGame();
+        }
+
+        function showLevels() {
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('levelContainer').style.display = 'block';
+            generateLevelGrid();
+        }
+
+        function startLevel(level) {
+            currentLevel = level;
+            targetScore = 500 + (level * 500);
+            document.getElementById('levelContainer').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            document.getElementById('score').textContent = `Score: 0 (Target: ${targetScore})`;
+            initGame();
+        }
+
+        function endGame() {
+            if(score >= targetScore) {
+                currentLevel = Math.min(currentLevel + 1, TOTAL_LEVELS);
+                alert(`Level ${currentLevel-1} Complete! New level unlocked: ${currentLevel}`);
+            }
+            showLobby();
+        }
+
+        function initGame() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            score = 0;
+            
+            // Initialize candies with touch events
+            for(let i=0; i<64; i++) {
+                const candy = document.createElement('div');
+                candy.className = 'candy';
+                candy.textContent = CANDIES[Math.floor(Math.random()*CANDIES.length)];
+                candy.addEventListener('touchstart', handleTouchStart);
+                candy.addEventListener('touchend', handleTouchEnd);
+                board.appendChild(candy);
+            }
+            
+            while(checkMatches(true));
+        }
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const candy = e.target;
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            
+            if(!selectedCandy) {
+                selectedCandy = candy;
+                candy.classList.add('selected');
+            }
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            if(!selectedCandy) return;
+
+            const touch = e.changedTouches[0];
+            const touchEndX = touch.clientX;
+            const touchEndY = touch.clientY;
+            
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+            
+            if(Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD) {
+                const direction = getSwipeDirection(dx, dy);
+                const adjacent = findAdjacentCandy(selectedCandy, direction);
+                
+                if(adjacent && areAdjacent(selectedCandy, adjacent)) {
+                    swapCandies(selectedCandy, adjacent);
+                    if(!checkMatches()) {
+                        setTimeout(() => swapCandies(selectedCandy, adjacent), 0);
+                    }
+                }
+            }
+            
+            selectedCandy.classList.remove('selected');
+            selectedCandy = null;
+        }
+
+        function getSwipeDirection(dx, dy) {
+            if(Math.abs(dx) > Math.abs(dy)) {
+                return dx > 0 ? 'right' : 'left';
+            } else {
+                return dy > 0 ? 'down' : 'up';
+            }
+        }
+
+        function findAdjacentCandy(candy, direction) {
+            const index = Array.from(candy.parentElement.children).indexOf(candy);
+            let targetIndex = -1;
+            
+            const row = Math.floor(index / 8);
+            const col = index % 8;
+
+            switch(direction) {
+                case 'left': targetIndex = col > 0 ? index - 1 : -1; break;
+                case 'right': targetIndex = col < 7 ? index + 1 : -1; break;
+                case 'up': targetIndex = row > 0 ? index - 8 : -1; break;
+                case 'down': targetIndex = row < 7 ? index + 8 : -1; break;
+            }
+
+            return targetIndex >= 0 ? candy.parentElement.children[targetIndex] : null;
+        }
+
+        function areAdjacent(c1, c2) {
+            const cells = Array.from(document.querySelectorAll('.candy'));
+            const index1 = cells.indexOf(c1);
+            const index2 = cells.indexOf(c2);
+            
+            const row1 = Math.floor(index1/8);
+            const col1 = index1%8;
+            const row2 = Math.floor(index2/8);
+            const col2 = index2%8;
+            
+            return (Math.abs(row1-row2) === 1 && col1 === col2) || 
+                   (Math.abs(col1-col2) === 1 && row1 === row2);
+        }
+
+        function swapCandies(c1, c2) {
+            const temp = c1.textContent;
+            c1.textContent = c2.textContent;
+            c2.textContent = temp;
+            
+            // Add visual feedback
+            c1.style.transform = 'scale(1.1)';
+            c2.style.transform = 'scale(1.1)';
+            setTimeout(() => {
+                c1.style.transform = 'scale(1)';
+                c2.style.transform = 'scale(1)';
+            }, 200);
+        }
+
+        // Rest of the game logic remains same as previous version
+        function checkMatches(initial = false) {
+            const cells = Array.from(document.querySelectorAll('.candy'));
+            let matches = new Set();
+
+            // Horizontal check
+            for(let row=0; row<8; row++) {
+                for(let col=0; col<6; col++) {
+                    const index = row*8 + col;
+                    if(cells[index].textContent &&
+                       cells[index].textContent === cells[index+1].textContent &&
+                       cells[index].textContent === cells[index+2].textContent) {
+                        matches.add(index);
+                        matches.add(index+1);
+                        matches.add(index+2);
+                    }
+                }
+            }
+
+            // Vertical check
+            for(let col=0; col<8; col++) {
+                for(let row=0; row<6; row++) {
+                    const index = row*8 + col;
+                    if(cells[index].textContent &&
+                       cells[index].textContent === cells[index+8].textContent &&
+                       cells[index].textContent === cells[index+16].textContent) {
+                        matches.add(index);
+                        matches.add(index+8);
+                        matches.add(index+16);
+                    }
+                }
+            }
+
+            if(matches.size > 0) {
+                processMatches(Array.from(matches));
+                if(!initial) updateScore(matches.size * 0);
+                return true;
+            }
+            return false;
+        }
+
+        function processMatches(matches) {
+            const cells = document.querySelectorAll('.candy');
+            
+            matches.forEach(index => {
+                cells[index].textContent = '';
+                cells[index].style.transform = 'scale(0)';
+                setTimeout(() => cells[index].style.transform = 'scale(1)', 0);
+            });
+            
+            setTimeout(applyGravity, 0);
+        }
+
+        function applyGravity() {
+            const cells = document.querySelectorAll('.candy');
+            
+            for(let col=0; col<8; col++) {
+                let emptySpots = [];
+                
+                for(let row=7; row>=0; row--) {
+                    const index = row*8 + col;
+                    if(cells[index].textContent === '') {
+                        emptySpots.push(index);
+                    } else if(emptySpots.length > 0) {
+                        const targetIndex = emptySpots.shift();
+                        cells[targetIndex].textContent = cells[index].textContent;
+                        cells[index].textContent = '';
+                        emptySpots.push(index);
+                    }
+                }
+                
+                emptySpots.forEach(index => {
+                    cells[index].textContent = CANDIES[Math.floor(Math.random()*CANDIES.length)];
+                });
+            }
+            
+            setTimeout(() => checkMatches(), 0);
+        }
+
+        function updateScore(points) {
+            score += points;
+            document.getElementById('score').textContent = `Score: ${score} (Target: ${targetScore})`;
+        }
+
+        // Initialize game
+        generateLevelGrid();
+    </script>
+</body>
+</html>
